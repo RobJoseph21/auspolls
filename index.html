@@ -228,6 +228,15 @@ const RIGHT_TEXT  = '#006BB3';
 const LEFT_TEXT   = '#C50030';
 const BANDWIDTH   = 0.15;
 
+// 2025 election result (3 May 2025)
+const ELECTION_DATE = new Date(2025, 4, 3); // May = 4 (0-indexed)
+const ELECTION_ALP = 34.6;
+const ELECTION_LNP = 31.8;
+const ELECTION_GRN = 12.2;
+const ELECTION_ONP = 6.4;
+const ELECTION_RIGHT = ELECTION_LNP + ELECTION_ONP; // 38.2
+const ELECTION_LEFT  = ELECTION_ALP + ELECTION_GRN;  // 46.8
+
 let chartInstance = null;
 
 // ── Data Fetching (tries fetch, then XHR, then JSONP) ──
@@ -498,20 +507,51 @@ function renderChart(polls) {
     sorted.map(p => ({ x: p.date.getTime(), y: p.left })), BANDWIDTH
   ).map(p => ({ x: new Date(p.x), y: p.y }));
 
+  // Prepend election result so trend lines connect to the election markers
+  rightSmooth.unshift({ x: ELECTION_DATE, y: ELECTION_RIGHT });
+  leftSmooth.unshift({ x: ELECTION_DATE, y: ELECTION_LEFT });
+
   updateHeader(rightSmooth, leftSmooth);
 
-  // Auto-scale Y axis
-  const allValues = [...rightDots.map(d => d.y), ...leftDots.map(d => d.y)];
+  // Auto-scale Y axis (include election results)
+  const allValues = [...rightDots.map(d => d.y), ...leftDots.map(d => d.y), ELECTION_RIGHT, ELECTION_LEFT];
   const dataMin = Math.min(...allValues);
   const dataMax = Math.max(...allValues);
   const yMin = Math.floor((dataMin - 3) / 5) * 5;
   const yMax = Math.ceil((dataMax + 3) / 5) * 5;
+
+  // Election result markers (opaque circles)
+  const electionRight = [{ x: ELECTION_DATE, y: ELECTION_RIGHT }];
+  const electionLeft  = [{ x: ELECTION_DATE, y: ELECTION_LEFT }];
 
   const ctx = document.getElementById('chart').getContext('2d');
   chartInstance = new Chart(ctx, {
     type: 'scatter',
     data: {
       datasets: [
+        // Election result markers (opaque, larger)
+        {
+          label: 'Election result (Right)',
+          data: electionRight,
+          backgroundColor: RIGHT_COLOR,
+          borderColor: '#fff',
+          borderWidth: 1.5,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointHitRadius: 14,
+          order: 0
+        },
+        {
+          label: 'Election result (Left)',
+          data: electionLeft,
+          backgroundColor: LEFT_COLOR,
+          borderColor: '#fff',
+          borderWidth: 1.5,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointHitRadius: 14,
+          order: 0
+        },
         {
           label: 'Right (individual polls)',
           data: rightDots,
@@ -593,16 +633,26 @@ function renderChart(polls) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          filter: item => item.dataset.label.includes('individual'),
+          filter: item => item.dataset.label.includes('individual') || item.dataset.label.includes('Election'),
           displayColors: true,
           callbacks: {
             title: items => {
+              const dsLabel = items[0].dataset.label;
+              if (dsLabel.includes('Election')) {
+                return '2025 Election Result, 3 May 2025';
+              }
               const meta = window._pollMeta[items[0].dataIndex];
               const d = new Date(items[0].parsed.x);
               const dateStr = d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
               return meta ? `${meta.pollster}, ${dateStr}` : dateStr;
             },
             label: item => {
+              const dsLabel = item.dataset.label;
+              if (dsLabel.includes('Election')) {
+                const gap = ELECTION_RIGHT - ELECTION_LEFT;
+                const leader = gap > 0 ? 'Right' : 'Left';
+                return ` ${leader} +${Math.abs(gap).toFixed(1)}`;
+              }
               const meta = window._pollMeta[item.dataIndex];
               if (!meta) return '';
               const gap = meta.right - meta.left;
@@ -611,12 +661,27 @@ function renderChart(polls) {
               return ` ${leader} +${Math.abs(gap).toFixed(1)}`;
             },
             labelColor: item => {
+              const dsLabel = item.dataset.label;
+              if (dsLabel.includes('Election')) {
+                const color = ELECTION_RIGHT > ELECTION_LEFT ? RIGHT_COLOR : LEFT_COLOR;
+                return { backgroundColor: color, borderColor: color };
+              }
               const meta = window._pollMeta[item.dataIndex];
               if (!meta) return { backgroundColor: '#888', borderColor: '#888' };
               const color = meta.right > meta.left ? RIGHT_COLOR : LEFT_COLOR;
               return { backgroundColor: color, borderColor: color };
             },
             afterBody: items => {
+              const dsLabel = items[0].dataset.label;
+              if (dsLabel.includes('Election')) {
+                const parties = [
+                  { name: 'ALP', pct: ELECTION_ALP },
+                  { name: 'L/NP', pct: ELECTION_LNP },
+                  { name: 'Greens', pct: ELECTION_GRN },
+                  { name: 'ONP', pct: ELECTION_ONP }
+                ].sort((a, b) => b.pct - a.pct);
+                return parties.map(p => `${p.name} ${p.pct}%`);
+              }
               const meta = window._pollMeta[items[0].dataIndex];
               if (!meta) return [];
               const parties = [
@@ -633,6 +698,7 @@ function renderChart(polls) {
       scales: {
         x: {
           type: 'time',
+          min: new Date(ELECTION_DATE.getTime() - 5 * 24 * 60 * 60 * 1000),
           time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
           grid: { color: 'rgba(0,0,0,0.05)' },
           ticks: { maxRotation: 0, font: { size: 10 }, maxTicksLimit: 7 }
