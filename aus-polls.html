@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#FAFAF8">
+<title>Federal Polls: Right vs Left</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+:root {
+  --bg: #FAFAF8;
+  --text: #1a1a1a;
+  --text-muted: #555;
+  --right: #006BB3;
+  --right-chart: #0087DC;
+  --left: #C50030;
+  --left-chart: #E4003B;
+  --right-dot: rgba(0, 135, 220, 0.22);
+  --left-dot: rgba(228, 0, 59, 0.22);
+  --border: #e0e0e0;
+}
+body {
+  margin: 0;
+  padding: 12px;
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  max-width: 720px;
+  margin: 0 auto;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+h1 {
+  font-size: clamp(1.1rem, 4vw, 1.5rem);
+  margin: 0 0 4px 0;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 12px 0;
+}
+.cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 10px 12px;
+  text-align: center;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.card-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+}
+.card-parties {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.card-value {
+  font-size: clamp(2rem, 8vw, 3.2rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.card.right .card-label, .card.right .card-value { color: var(--right); }
+.card.left .card-label, .card.left .card-value { color: var(--left); }
+
+.lead {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 10px 0 14px;
+  min-height: 28px;
+}
+.chart-wrap {
+  position: relative;
+  width: 100%;
+  height: 45vh;
+  min-height: 260px;
+  max-height: 500px;
+}
+.chart-wrap canvas { width: 100% !important; height: 100% !important; }
+
+.info-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.refresh-btn {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.refresh-btn:active { background: #f0f0f0; }
+
+.footer {
+  padding: 8px 0 16px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.5;
+}
+.footer a { color: var(--text-muted); }
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  gap: 12px;
+}
+.spinner {
+  width: 28px; height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--right);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 0.8rem; color: var(--text-muted); }
+
+.error-banner {
+  background: #fff3f3;
+  border: 1px solid #ffcdd2;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 10px 0;
+  font-size: 0.8rem;
+  color: #c62828;
+  display: none;
+}
+.warn-banner {
+  background: #fffde7;
+  border: 1px solid #fff9c4;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 0 0 10px;
+  font-size: 0.72rem;
+  color: #f57f17;
+  display: none;
+}
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<h1>Federal Polls: Right vs Left</h1>
+<p class="subtitle">Australian federal election polling since May 2025</p>
+
+<div class="cards">
+  <div class="card right">
+    <div class="card-label">Right</div>
+    <div class="card-parties">Coalition + One Nation</div>
+    <div class="card-value" id="rightPct">--</div>
+  </div>
+  <div class="card left">
+    <div class="card-label">Left</div>
+    <div class="card-parties">Labor + Greens</div>
+    <div class="card-value" id="leftPct">--</div>
+  </div>
+</div>
+<div class="lead" id="lead"></div>
+
+<div id="warnBanner" class="warn-banner"></div>
+<div id="errorBanner" class="error-banner"></div>
+
+<div id="loadingEl" class="loading">
+  <div class="spinner"></div>
+  <div class="loading-text">Loading polls from Wikipedia...</div>
+</div>
+
+<div class="chart-wrap" id="chartWrap" class="hidden">
+  <canvas id="chart"></canvas>
+</div>
+
+<div class="info-bar">
+  <span id="pollCount"></span>
+  <button class="refresh-btn" id="refreshBtn" onclick="loadData()">&#8635; Refresh</button>
+</div>
+
+<div class="footer">
+  Data from <a href="https://en.wikipedia.org/wiki/Opinion_polling_for_the_next_Australian_federal_election" target="_blank">Wikipedia</a><br>
+  <span id="updated"></span>
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────
+const API_BASE = 'https://en.wikipedia.org/w/api.php';
+const PAGE = 'Opinion_polling_for_the_next_Australian_federal_election';
+const SECTIONS = [5, 6]; // 2026, 2025
+const RIGHT_COLOR = '#0087DC';
+const LEFT_COLOR  = '#E4003B';
+const RIGHT_TEXT  = '#006BB3';
+const LEFT_TEXT   = '#C50030';
+const BANDWIDTH   = 0.15;
+
+// 2025 election result (3 May 2025)
+const ELECTION_DATE = new Date(2025, 4, 3); // May = 4 (0-indexed)
+const ELECTION_ALP = 34.6;
+const ELECTION_LNP = 31.8;
+const ELECTION_GRN = 12.2;
+const ELECTION_ONP = 6.4;
+const ELECTION_RIGHT = ELECTION_LNP + ELECTION_ONP; // 38.2
+const ELECTION_LEFT  = ELECTION_ALP + ELECTION_GRN;  // 46.8
+
+let chartInstance = null;
+
+// ── Data Fetching (tries fetch, then XHR, then JSONP) ──
+function setStatus(msg) {
+  const el = document.querySelector('.loading-text');
+  if (el) el.textContent = msg;
+}
+
+function fetchViaFetch(n) {
+  const url = `${API_BASE}?action=parse&page=${encodeURIComponent(PAGE)}&prop=text&section=${n}&format=json&origin=*`;
+  return fetch(url).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    .then(d => d.parse.text['*']);
+}
+
+function fetchViaXHR(n) {
+  return new Promise((resolve, reject) => {
+    const url = `${API_BASE}?action=parse&page=${encodeURIComponent(PAGE)}&prop=text&section=${n}&format=json&origin=*`;
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url);
+    xhr.timeout = 15000;
+    xhr.onload = function() {
+      try { resolve(JSON.parse(xhr.responseText).parse.text['*']); }
+      catch(e) { reject(e); }
+    };
+    xhr.onerror = () => reject(new Error('XHR error'));
+    xhr.ontimeout = () => reject(new Error('XHR timeout'));
+    xhr.send();
+  });
+}
+
+function fetchViaJSONP(n) {
+  return new Promise((resolve, reject) => {
+    const cb = '_wpcb_' + n + '_' + Date.now();
+    const script = document.createElement('script');
+    let done = false;
+    window[cb] = function(data) {
+      done = true; delete window[cb]; script.remove();
+      try { resolve(data.parse.text['*']); } catch(e) { reject(e); }
+    };
+    script.onerror = function() {
+      if (!done) { done = true; delete window[cb]; reject(new Error('JSONP error')); }
+      script.remove();
+    };
+    script.src = `${API_BASE}?action=parse&page=${encodeURIComponent(PAGE)}&prop=text&section=${n}&format=json&callback=${cb}`;
+    document.head.appendChild(script);
+    setTimeout(() => {
+      if (!done) { done = true; delete window[cb]; script.remove(); reject(new Error('JSONP timeout')); }
+    }, 15000);
+  });
+}
+
+async function fetchSection(n) {
+  try { return await fetchViaFetch(n); } catch(e) { /* fall through */ }
+  try { return await fetchViaXHR(n); } catch(e) { /* fall through */ }
+  return await fetchViaJSONP(n);
+}
+
+// ── HTML Parsing ────────────────────────────────────────
+const MONTHS = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 };
+
+function parseDate(text, year) {
+  // Handles: "9–14 Mar", "23 Feb–1 Mar", "23–26 Feb", "11 Mar"
+  text = text.replace(/\u2013/g, '-').replace(/\u2014/g, '-').trim();
+
+  // "23 Feb–1 Mar" or "23 Feb - 1 Mar"
+  let m = text.match(/\d{1,2}\s+\w+\s*-\s*(\d{1,2})\s+(\w+)/);
+  if (m) {
+    const month = MONTHS[m[2].toLowerCase().substring(0, 3)];
+    if (month !== undefined) return new Date(year, month, parseInt(m[1]));
+  }
+
+  // "9–14 Mar" or "23–26 Feb"
+  m = text.match(/\d{1,2}\s*-\s*(\d{1,2})\s+(\w+)/);
+  if (m) {
+    const month = MONTHS[m[2].toLowerCase().substring(0, 3)];
+    if (month !== undefined) return new Date(year, month, parseInt(m[1]));
+  }
+
+  // "11 Mar"
+  m = text.match(/(\d{1,2})\s+(\w+)/);
+  if (m) {
+    const month = MONTHS[m[2].toLowerCase().substring(0, 3)];
+    if (month !== undefined) return new Date(year, month, parseInt(m[1]));
+  }
+
+  return null;
+}
+
+function parsePercentage(td) {
+  if (!td) return null;
+  const text = td.textContent.trim();
+  if (text === '' || text === '—' || text.includes('N/A') || text.includes('N/a') || text === '–') return null;
+  const m = text.match(/(\d+\.?\d*)%?/);
+  return m ? parseFloat(m[1]) : null;
+}
+
+function detectTableStructure(table) {
+  // Detect whether L/NP is split into sub-columns (LIB, LNP, NAT) or a single column
+  const rows = table.querySelectorAll('tbody > tr');
+  for (const row of rows) {
+    const ths = row.querySelectorAll('th');
+    for (const th of ths) {
+      if (th.textContent.trim() === 'LIB') return 'split'; // 2026 style
+    }
+  }
+  return 'combined'; // 2025 style - L/NP is a single column
+}
+
+function parseSection(html, year) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const table = doc.querySelector('table.wikitable');
+  if (!table) return [];
+
+  const structure = detectTableStructure(table);
+  const rows = table.querySelectorAll('tbody > tr');
+  const polls = [];
+
+  for (const tr of rows) {
+    const ths = tr.querySelectorAll('th');
+    const tds = tr.querySelectorAll('td');
+
+    // Skip pure header rows (many th, no td)
+    if (tds.length < 6) continue;
+
+    // Skip event rows (td with large colspan like 14)
+    let isEvent = false;
+    for (const td of tds) {
+      if ((parseInt(td.getAttribute('colspan')) || 1) > 5) { isEvent = true; break; }
+    }
+    if (isEvent) continue;
+
+    // Get date from first th cell
+    if (ths.length === 0) continue;
+    const dateText = ths[0].textContent.trim();
+    const date = parseDate(dateText, year);
+    if (!date || isNaN(date.getTime())) continue;
+
+    // Row structure (td indices):
+    // td[0]: Pollster, td[1]: Mode, td[2]: Sample, td[3]: ALP
+    //
+    // 2026 "split" structure (L/NP subdivided):
+    //   td[4]: L/NP (colspan=3 when combined) or LIB (no colspan)
+    //   If colspan=3: td[5]=GRN, td[6]=ONP
+    //   If no colspan: td[5]=LNP(Qld), td[6]=NAT, td[7]=GRN, td[8]=ONP
+    //
+    // 2025 "combined" structure (L/NP is single column):
+    //   td[4]=L/NP, td[5]=GRN, td[6]=ONP
+
+    const pollster = tds[0].textContent.trim().replace(/\[.*?\]/g, '');
+    const alp = parsePercentage(tds[3]);
+
+    let lnp, grn, onp;
+
+    if (structure === 'combined') {
+      // 2025 style: L/NP is always a single column
+      lnp = parsePercentage(tds[4]);
+      grn = parsePercentage(tds[5]);
+      onp = parsePercentage(tds[6]);
+    } else {
+      // 2026 style: detect if this row uses colspan=3, colspan=2, or splits L/NP
+      const lnpCell = tds[4];
+      if (!lnpCell) continue;
+      const lnpColspan = parseInt(lnpCell.getAttribute('colspan')) || 1;
+
+      if (lnpColspan >= 3) {
+        // Fully combined L/NP
+        lnp = parsePercentage(tds[4]);
+        grn = parsePercentage(tds[5]);
+        onp = parsePercentage(tds[6]);
+      } else if (lnpColspan === 2) {
+        // LIB+LNP combined (colspan=2), NAT separate
+        const libLnp = parsePercentage(tds[4]) || 0;
+        const nat = parsePercentage(tds[5]) || 0;
+        lnp = libLnp + nat;
+        if (lnp === 0) lnp = null;
+        grn = parsePercentage(tds[6]);
+        onp = parsePercentage(tds[7]);
+      } else {
+        // Fully split into LIB, LNP(Qld), NAT
+        const lib = parsePercentage(tds[4]) || 0;
+        const lnpQld = parsePercentage(tds[5]) || 0;
+        const nat = parsePercentage(tds[6]) || 0;
+        lnp = lib + lnpQld + nat;
+        if (lnp === 0) lnp = null;
+        grn = parsePercentage(tds[7]);
+        onp = parsePercentage(tds[8]);
+      }
+    }
+
+    if (alp === null || lnp === null || grn === null || onp === null) continue;
+
+    const right = lnp + onp;
+    const left = alp + grn;
+    if (right > 100 || left > 100 || right < 5 || left < 5) continue;
+
+    polls.push({ date, pollster, right, left, alp, lnp, grn, onp });
+  }
+
+  return polls;
+}
+
+// ── LOWESS Smoothing ────────────────────────────────────
+function lowess(data, bandwidth) {
+  const n = data.length;
+  if (n < 3) return data.map(d => ({ x: d.x, y: d.y }));
+
+  const sorted = [...data].sort((a, b) => a.x - b.x);
+  const xMin = sorted[0].x;
+  const xMax = sorted[n - 1].x;
+  const step = 2 * 24 * 60 * 60 * 1000;
+  const result = [];
+  const k = Math.max(3, Math.floor(n * bandwidth));
+
+  for (let xEval = xMin; xEval <= xMax; xEval += step) {
+    const dists = sorted.map((d, i) => ({ dist: Math.abs(d.x - xEval), i }));
+    dists.sort((a, b) => a.dist - b.dist);
+    const neighbors = dists.slice(0, k);
+    const h = neighbors[neighbors.length - 1].dist || 1;
+
+    let sumW = 0, sumWY = 0, sumWX = 0, sumWXX = 0, sumWXY = 0;
+
+    for (const nb of neighbors) {
+      const u = nb.dist / h;
+      const w = u >= 1 ? 0 : Math.pow(1 - u * u * u, 3);
+      const xi = sorted[nb.i].x - xEval;
+      const yi = sorted[nb.i].y;
+      sumW   += w;
+      sumWX  += w * xi;
+      sumWY  += w * yi;
+      sumWXX += w * xi * xi;
+      sumWXY += w * xi * yi;
+    }
+
+    if (sumW === 0) continue;
+
+    const denom = sumW * sumWXX - sumWX * sumWX;
+    let ySmooth;
+    if (Math.abs(denom) < 1e-10) {
+      ySmooth = sumWY / sumW;
+    } else {
+      ySmooth = (sumWXX * sumWY - sumWX * sumWXY) / denom;
+    }
+
+    result.push({ x: xEval, y: ySmooth });
+  }
+
+  return result;
+}
+
+// ── Chart ───────────────────────────────────────────────
+function renderChart(polls) {
+  const sorted = [...polls].sort((a, b) => a.date - b.date);
+
+  const rightDots = sorted.map(p => ({ x: p.date, y: p.right }));
+  const leftDots  = sorted.map(p => ({ x: p.date, y: p.left }));
+
+  window._pollMeta = sorted.map(p => ({
+    pollster: p.pollster, right: p.right, left: p.left,
+    alp: p.alp, lnp: p.lnp, grn: p.grn, onp: p.onp
+  }));
+
+  const rightSmooth = lowess(
+    sorted.map(p => ({ x: p.date.getTime(), y: p.right })), BANDWIDTH
+  ).map(p => ({ x: new Date(p.x), y: p.y }));
+
+  const leftSmooth = lowess(
+    sorted.map(p => ({ x: p.date.getTime(), y: p.left })), BANDWIDTH
+  ).map(p => ({ x: new Date(p.x), y: p.y }));
+
+  // Prepend election result so trend lines connect to the election markers
+  rightSmooth.unshift({ x: ELECTION_DATE, y: ELECTION_RIGHT });
+  leftSmooth.unshift({ x: ELECTION_DATE, y: ELECTION_LEFT });
+
+  updateHeader(rightSmooth, leftSmooth);
+
+  // Auto-scale Y axis (include election results)
+  const allValues = [...rightDots.map(d => d.y), ...leftDots.map(d => d.y), ELECTION_RIGHT, ELECTION_LEFT];
+  const dataMin = Math.min(...allValues);
+  const dataMax = Math.max(...allValues);
+  const yMin = Math.floor((dataMin - 3) / 5) * 5;
+  const yMax = Math.ceil((dataMax + 3) / 5) * 5;
+
+  // Election result markers (opaque circles)
+  const electionRight = [{ x: ELECTION_DATE, y: ELECTION_RIGHT }];
+  const electionLeft  = [{ x: ELECTION_DATE, y: ELECTION_LEFT }];
+
+  const ctx = document.getElementById('chart').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        // Election result markers (opaque, larger)
+        {
+          label: 'Election result (Right)',
+          data: electionRight,
+          backgroundColor: RIGHT_COLOR,
+          borderColor: '#fff',
+          borderWidth: 1.5,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointHitRadius: 14,
+          order: 0
+        },
+        {
+          label: 'Election result (Left)',
+          data: electionLeft,
+          backgroundColor: LEFT_COLOR,
+          borderColor: '#fff',
+          borderWidth: 1.5,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointHitRadius: 14,
+          order: 0
+        },
+        {
+          label: 'Right (individual polls)',
+          data: rightDots,
+          backgroundColor: 'rgba(0, 135, 220, 0.18)',
+          borderColor: 'transparent',
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          pointHitRadius: 12,
+          order: 4
+        },
+        {
+          label: 'Left (individual polls)',
+          data: leftDots,
+          backgroundColor: 'rgba(228, 0, 59, 0.18)',
+          borderColor: 'transparent',
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          pointHitRadius: 12,
+          order: 4
+        },
+        {
+          label: '_rightOutline',
+          data: rightSmooth,
+          type: 'line',
+          borderColor: '#fff',
+          borderWidth: 6,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          pointHitRadius: 0,
+          tension: 0.3,
+          fill: false,
+          order: 2
+        },
+        {
+          label: '_leftOutline',
+          data: leftSmooth,
+          type: 'line',
+          borderColor: '#fff',
+          borderWidth: 6,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          pointHitRadius: 0,
+          tension: 0.3,
+          fill: false,
+          order: 2
+        },
+        {
+          label: 'Right trend',
+          data: rightSmooth,
+          type: 'line',
+          borderColor: RIGHT_COLOR,
+          borderWidth: 3.5,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          pointHitRadius: 0,
+          tension: 0.3,
+          fill: false,
+          order: 1
+        },
+        {
+          label: 'Left trend',
+          data: leftSmooth,
+          type: 'line',
+          borderColor: LEFT_COLOR,
+          borderWidth: 3.5,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          pointHitRadius: 0,
+          tension: 0.3,
+          fill: false,
+          order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: true },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          filter: item => item.dataset.label.includes('individual') || item.dataset.label.includes('Election'),
+          displayColors: true,
+          callbacks: {
+            title: items => {
+              const dsLabel = items[0].dataset.label;
+              if (dsLabel.includes('Election')) {
+                return '2025 Election Result, 3 May 2025';
+              }
+              const meta = window._pollMeta[items[0].dataIndex];
+              const d = new Date(items[0].parsed.x);
+              const dateStr = d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+              return meta ? `${meta.pollster}, ${dateStr}` : dateStr;
+            },
+            label: item => {
+              const dsLabel = item.dataset.label;
+              if (dsLabel.includes('Election')) {
+                const gap = ELECTION_RIGHT - ELECTION_LEFT;
+                const leader = gap > 0 ? 'Right' : 'Left';
+                return ` ${leader} +${Math.abs(gap).toFixed(1)}`;
+              }
+              const meta = window._pollMeta[item.dataIndex];
+              if (!meta) return '';
+              const gap = meta.right - meta.left;
+              if (Math.abs(gap) < 0.5) return 'Tied';
+              const leader = gap > 0 ? 'Right' : 'Left';
+              return ` ${leader} +${Math.abs(gap).toFixed(1)}`;
+            },
+            labelColor: item => {
+              const dsLabel = item.dataset.label;
+              if (dsLabel.includes('Election')) {
+                const color = ELECTION_RIGHT > ELECTION_LEFT ? RIGHT_COLOR : LEFT_COLOR;
+                return { backgroundColor: color, borderColor: color };
+              }
+              const meta = window._pollMeta[item.dataIndex];
+              if (!meta) return { backgroundColor: '#888', borderColor: '#888' };
+              const color = meta.right > meta.left ? RIGHT_COLOR : LEFT_COLOR;
+              return { backgroundColor: color, borderColor: color };
+            },
+            afterBody: items => {
+              const dsLabel = items[0].dataset.label;
+              if (dsLabel.includes('Election')) {
+                const parties = [
+                  { name: 'ALP', pct: ELECTION_ALP },
+                  { name: 'L/NP', pct: ELECTION_LNP },
+                  { name: 'Greens', pct: ELECTION_GRN },
+                  { name: 'ONP', pct: ELECTION_ONP }
+                ].sort((a, b) => b.pct - a.pct);
+                return parties.map(p => `${p.name} ${p.pct}%`);
+              }
+              const meta = window._pollMeta[items[0].dataIndex];
+              if (!meta) return [];
+              const parties = [
+                { name: 'ALP', pct: meta.alp },
+                { name: 'L/NP', pct: meta.lnp },
+                { name: 'Greens', pct: meta.grn },
+                { name: 'ONP', pct: meta.onp }
+              ].sort((a, b) => b.pct - a.pct);
+              return parties.map(p => `${p.name} ${p.pct}%`);
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          min: new Date(ELECTION_DATE.getTime() - 5 * 24 * 60 * 60 * 1000),
+          time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
+          grid: { color: 'rgba(0,0,0,0.05)' },
+          ticks: { maxRotation: 0, font: { size: 10 }, maxTicksLimit: 7 }
+        },
+        y: {
+          min: yMin, max: yMax,
+          ticks: { callback: v => v + '%', stepSize: 5, font: { size: 10 } },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        }
+      }
+    }
+  });
+}
+
+// ── Header Update ───────────────────────────────────────
+function updateHeader(rightSmooth, leftSmooth) {
+  const avgR = rightSmooth[rightSmooth.length - 1].y;
+  const avgL = leftSmooth[leftSmooth.length - 1].y;
+  const gap = avgR - avgL;
+
+  document.getElementById('rightPct').textContent = avgR.toFixed(1) + '%';
+  document.getElementById('leftPct').textContent  = avgL.toFixed(1) + '%';
+
+  const leadEl = document.getElementById('lead');
+  if (Math.abs(gap) < 0.5) {
+    leadEl.textContent = 'Essentially tied';
+    leadEl.style.color = 'var(--text-muted)';
+  } else if (gap > 0) {
+    leadEl.textContent = `Right leads by ${gap.toFixed(1)} points`;
+    leadEl.style.color = RIGHT_TEXT;
+  } else {
+    leadEl.textContent = `Left leads by ${Math.abs(gap).toFixed(1)} points`;
+    leadEl.style.color = LEFT_TEXT;
+  }
+}
+
+// ── Main Load ───────────────────────────────────────────
+async function loadData() {
+  const loadingEl = document.getElementById('loadingEl');
+  const chartWrap = document.getElementById('chartWrap');
+  const errorBanner = document.getElementById('errorBanner');
+  const warnBanner = document.getElementById('warnBanner');
+
+  loadingEl.classList.remove('hidden');
+  chartWrap.classList.add('hidden');
+  errorBanner.style.display = 'none';
+  warnBanner.style.display = 'none';
+
+  if (chartInstance) {
+    chartInstance.destroy();
+    chartInstance = null;
+  }
+
+  try {
+    setStatus('Fetching 2026 polls...');
+    const results = await Promise.allSettled(SECTIONS.map((n, i) => {
+      return fetchSection(n).then(html => { setStatus(`Loaded ${['2026','2025'][i]} polls...`); return html; });
+    }));
+
+    let allPolls = [];
+    let failedSections = 0;
+    let errors = [];
+
+    const years = [2026, 2025];
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        const polls = parseSection(r.value, years[i]);
+        allPolls = allPolls.concat(polls);
+      } else {
+        failedSections++;
+        errors.push(r.reason.message);
+        console.error(`Section ${SECTIONS[i]} failed:`, r.reason);
+      }
+    });
+
+    if (allPolls.length === 0) {
+      throw new Error('Could not load data (' + errors.join(', ') + '). Try opening this file directly in your browser.');
+    }
+
+    if (failedSections > 0) {
+      warnBanner.textContent = `${failedSections} of ${SECTIONS.length} year tables failed to load. Showing partial data.`;
+      warnBanner.style.display = 'block';
+    }
+
+    allPolls.sort((a, b) => a.date - b.date);
+
+    loadingEl.classList.add('hidden');
+    chartWrap.classList.remove('hidden');
+
+    setTimeout(() => renderChart(allPolls), 0);
+
+    document.getElementById('pollCount').textContent = `Based on ${allPolls.length} polls`;
+    document.getElementById('updated').textContent = `Last refreshed ${new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+
+  } catch (err) {
+    loadingEl.classList.add('hidden');
+    errorBanner.textContent = `Failed to load data: ${err.message}. Tap Refresh to try again.`;
+    errorBanner.style.display = 'block';
+    console.error(err);
+  }
+}
+
+// ── Init ────────────────────────────────────────────────
+if (typeof Chart !== 'undefined') {
+  loadData();
+} else {
+  document.getElementById('loadingEl').classList.add('hidden');
+  document.getElementById('errorBanner').textContent = 'Chart.js failed to load. Check your internet connection and reload.';
+  document.getElementById('errorBanner').style.display = 'block';
+}
+</script>
+</body>
+</html>
