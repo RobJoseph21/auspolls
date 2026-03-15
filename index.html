@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#FAFAF8">
-<title>Combined Primary Vote: Right vs Left</title>
+<title>Federal Polls: Right vs Left</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <style>
@@ -178,8 +178,8 @@ h1 {
 </head>
 <body>
 
-<h1>Combined Primary Vote: Right vs Left</h1>
-<p class="subtitle">Australian federal primary vote polling since May 2025</p>
+<h1>Federal Polls: Right vs Left</h1>
+<p class="subtitle">Australian federal election polling since May 2025</p>
 
 <div class="cards">
   <div class="card right">
@@ -519,8 +519,6 @@ function renderChart(polls) {
   const dataMax = Math.max(...allValues);
   const yMin = Math.floor((dataMin - 3) / 5) * 5;
   const yMax = Math.ceil((dataMax + 3) / 5) * 5;
-  // const yMin = Math.floor((dataMin - 3) / 5) * 5;
-  // const yMax = Math.ceil((dataMax + 3) / 5) * 5;
 
   // Election result markers (opaque circles)
   const electionRight = [{ x: ELECTION_DATE, y: ELECTION_RIGHT }];
