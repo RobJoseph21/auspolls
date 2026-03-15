@@ -517,8 +517,8 @@ function renderChart(polls) {
   const allValues = [...rightDots.map(d => d.y), ...leftDots.map(d => d.y), ELECTION_RIGHT, ELECTION_LEFT];
   const dataMin = Math.min(...allValues);
   const dataMax = Math.max(...allValues);
-  const yMin = Math.floor((dataMin - 1) / 2) * 2;
-  const yMax = Math.ceil((dataMax + 1) / 2) * 2;
+  const yMin = 0.35;
+  const yMax = 0.5;
   // const yMin = Math.floor((dataMin - 3) / 5) * 5;
   // const yMax = Math.ceil((dataMax + 3) / 5) * 5;
 
