@@ -83,7 +83,6 @@ h1 {
 }
 .card.right .card-label, .card.right .card-value { color: var(--right); }
 .card.left .card-label, .card.left .card-value { color: var(--left); }
-
 .lead {
   text-align: center;
   font-size: 1.1rem;
@@ -99,7 +98,6 @@ h1 {
   max-height: 500px;
 }
 .chart-wrap canvas { width: 100% !important; height: 100% !important; }
-
 .info-bar {
   display: flex;
   align-items: center;
@@ -124,7 +122,6 @@ h1 {
   gap: 4px;
 }
 .refresh-btn:active { background: #f0f0f0; }
-
 .footer {
   padding: 8px 0 16px;
   font-size: 0.75rem;
@@ -133,7 +130,6 @@ h1 {
   line-height: 1.5;
 }
 .footer a { color: var(--text-muted); }
-
 .loading {
   display: flex;
   flex-direction: column;
@@ -151,7 +147,6 @@ h1 {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text { font-size: 0.8rem; color: var(--text-muted); }
-
 .error-banner {
   background: #fff3f3;
   border: 1px solid #ffcdd2;
@@ -172,15 +167,12 @@ h1 {
   color: #f57f17;
   display: none;
 }
-
 .hidden { display: none !important; }
 </style>
 </head>
 <body>
-
 <h1>Combined Primary Vote: Right vs Left</h1>
 <p class="subtitle">Australian federal primary vote polling since May 2025</p>
-
 <div class="cards">
   <div class="card right">
     <div class="card-label">Right</div>
@@ -194,29 +186,23 @@ h1 {
   </div>
 </div>
 <div class="lead" id="lead"></div>
-
 <div id="warnBanner" class="warn-banner"></div>
 <div id="errorBanner" class="error-banner"></div>
-
 <div id="loadingEl" class="loading">
   <div class="spinner"></div>
   <div class="loading-text">Loading polls from Wikipedia...</div>
 </div>
-
 <div class="chart-wrap" id="chartWrap" class="hidden">
   <canvas id="chart"></canvas>
 </div>
-
 <div class="info-bar">
   <span id="pollCount"></span>
   <button class="refresh-btn" id="refreshBtn" onclick="loadData()">&#8635; Refresh</button>
 </div>
-
 <div class="footer">
   Data from <a href="https://en.wikipedia.org/wiki/Opinion_polling_for_the_next_Australian_federal_election" target="_blank">Wikipedia</a><br>
   <span id="updated"></span>
 </div>
-
 <script>
 // ── Config ──────────────────────────────────────────────
 const API_BASE = 'https://en.wikipedia.org/w/api.php';
@@ -227,7 +213,6 @@ const LEFT_COLOR  = '#E4003B';
 const RIGHT_TEXT  = '#006BB3';
 const LEFT_TEXT   = '#C50030';
 const BANDWIDTH   = 0.15;
-
 // 2025 election result (3 May 2025)
 const ELECTION_DATE = new Date(2025, 4, 3); // May = 4 (0-indexed)
 const ELECTION_ALP = 34.6;
@@ -236,21 +221,17 @@ const ELECTION_GRN = 12.2;
 const ELECTION_ONP = 6.4;
 const ELECTION_RIGHT = ELECTION_LNP + ELECTION_ONP; // 38.2
 const ELECTION_LEFT  = ELECTION_ALP + ELECTION_GRN;  // 46.8
-
 let chartInstance = null;
-
 // ── Data Fetching (tries fetch, then XHR, then JSONP) ──
 function setStatus(msg) {
   const el = document.querySelector('.loading-text');
   if (el) el.textContent = msg;
 }
-
 function fetchViaFetch(n) {
   const url = `${API_BASE}?action=parse&page=${encodeURIComponent(PAGE)}&prop=text&section=${n}&format=json&origin=*`;
   return fetch(url).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
     .then(d => d.parse.text['*']);
 }
-
 function fetchViaXHR(n) {
   return new Promise((resolve, reject) => {
     const url = `${API_BASE}?action=parse&page=${encodeURIComponent(PAGE)}&prop=text&section=${n}&format=json&origin=*`;
@@ -266,7 +247,6 @@ function fetchViaXHR(n) {
     xhr.send();
   });
 }
-
 function fetchViaJSONP(n) {
   return new Promise((resolve, reject) => {
     const cb = '_wpcb_' + n + '_' + Date.now();
@@ -287,44 +267,32 @@ function fetchViaJSONP(n) {
     }, 15000);
   });
 }
-
 async function fetchSection(n) {
   try { return await fetchViaFetch(n); } catch(e) { /* fall through */ }
   try { return await fetchViaXHR(n); } catch(e) { /* fall through */ }
   return await fetchViaJSONP(n);
 }
-
 // ── HTML Parsing ────────────────────────────────────────
 const MONTHS = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 };
-
 function parseDate(text, year) {
-  // Handles: "9–14 Mar", "23 Feb–1 Mar", "23–26 Feb", "11 Mar"
   text = text.replace(/\u2013/g, '-').replace(/\u2014/g, '-').trim();
-
-  // "23 Feb–1 Mar" or "23 Feb - 1 Mar"
   let m = text.match(/\d{1,2}\s+\w+\s*-\s*(\d{1,2})\s+(\w+)/);
   if (m) {
     const month = MONTHS[m[2].toLowerCase().substring(0, 3)];
     if (month !== undefined) return new Date(year, month, parseInt(m[1]));
   }
-
-  // "9–14 Mar" or "23–26 Feb"
   m = text.match(/\d{1,2}\s*-\s*(\d{1,2})\s+(\w+)/);
   if (m) {
     const month = MONTHS[m[2].toLowerCase().substring(0, 3)];
     if (month !== undefined) return new Date(year, month, parseInt(m[1]));
   }
-
-  // "11 Mar"
   m = text.match(/(\d{1,2})\s+(\w+)/);
   if (m) {
     const month = MONTHS[m[2].toLowerCase().substring(0, 3)];
     if (month !== undefined) return new Date(year, month, parseInt(m[1]));
   }
-
   return null;
 }
-
 function parsePercentage(td) {
   if (!td) return null;
   const text = td.textContent.trim();
@@ -332,17 +300,35 @@ function parsePercentage(td) {
   const m = text.match(/(\d+\.?\d*)%?/);
   return m ? parseFloat(m[1]) : null;
 }
-
 function detectTableStructure(table) {
-  // Detect whether L/NP is split into sub-columns (LIB, LNP, NAT) or a single column
   const rows = table.querySelectorAll('tbody > tr');
   for (const row of rows) {
     const ths = row.querySelectorAll('th');
     for (const th of ths) {
-      if (th.textContent.trim() === 'LIB') return 'split'; // 2026 style
+      if (th.textContent.trim() === 'LIB') return 'split';
     }
   }
-  return 'combined'; // 2025 style - L/NP is a single column
+  return 'combined';
+}
+
+// Detect how many metadata columns (Date, Firm, etc.) precede the party data
+// by counting th cells with large rowspan in the first header row.
+// Date is rendered as th in data rows, so the td offset for ALP = metaCols - 1.
+function detectOffset(table) {
+  const rows = table.querySelectorAll('tbody > tr');
+  for (const row of rows) {
+    const ths = row.querySelectorAll('th');
+    if (ths.length < 3) continue;
+    let count = 0;
+    for (const th of ths) {
+      const rs = parseInt(th.getAttribute('rowspan')) || 1;
+      const cs = parseInt(th.getAttribute('colspan')) || 1;
+      if (rs >= 3 && cs === 1) count++;
+      else break;
+    }
+    if (count > 0) return count - 1; // subtract 1 for Date (which stays as th)
+  }
+  return 3; // fallback: Pollster, Mode, Sample
 }
 
 function parseSection(html, year) {
@@ -350,115 +336,80 @@ function parseSection(html, year) {
   const doc = parser.parseFromString(html, 'text/html');
   const table = doc.querySelector('table.wikitable');
   if (!table) return [];
-
   const structure = detectTableStructure(table);
+  const offset = detectOffset(table);
   const rows = table.querySelectorAll('tbody > tr');
   const polls = [];
-
   for (const tr of rows) {
     const ths = tr.querySelectorAll('th');
     const tds = tr.querySelectorAll('td');
-
-    // Skip pure header rows (many th, no td)
     if (tds.length < 6) continue;
-
-    // Skip event rows (td with large colspan like 14)
     let isEvent = false;
     for (const td of tds) {
       if ((parseInt(td.getAttribute('colspan')) || 1) > 5) { isEvent = true; break; }
     }
     if (isEvent) continue;
-
-    // Get date from first th cell
     if (ths.length === 0) continue;
     const dateText = ths[0].textContent.trim();
     const date = parseDate(dateText, year);
     if (!date || isNaN(date.getTime())) continue;
 
-    // Row structure (td indices):
-    // td[0]: Pollster, td[1]: Mode, td[2]: Sample, td[3]: ALP
-    //
-    // 2026 "split" structure (L/NP subdivided):
-    //   td[4]: L/NP (colspan=3 when combined) or LIB (no colspan)
-    //   If colspan=3: td[5]=GRN, td[6]=ONP
-    //   If no colspan: td[5]=LNP(Qld), td[6]=NAT, td[7]=GRN, td[8]=ONP
-    //
-    // 2025 "combined" structure (L/NP is single column):
-    //   td[4]=L/NP, td[5]=GRN, td[6]=ONP
-
     const pollster = tds[0].textContent.trim().replace(/\[.*?\]/g, '');
-    const alp = parsePercentage(tds[3]);
-
+    const alp = parsePercentage(tds[offset]);
     let lnp, grn, onp;
-
     if (structure === 'combined') {
-      // 2025 style: L/NP is always a single column
-      lnp = parsePercentage(tds[4]);
-      grn = parsePercentage(tds[5]);
-      onp = parsePercentage(tds[6]);
+      lnp = parsePercentage(tds[offset + 1]);
+      grn = parsePercentage(tds[offset + 2]);
+      onp = parsePercentage(tds[offset + 3]);
     } else {
-      // 2026 style: detect if this row uses colspan=3, colspan=2, or splits L/NP
-      const lnpCell = tds[4];
+      const lnpCell = tds[offset + 1];
       if (!lnpCell) continue;
       const lnpColspan = parseInt(lnpCell.getAttribute('colspan')) || 1;
-
       if (lnpColspan >= 3) {
-        // Fully combined L/NP
-        lnp = parsePercentage(tds[4]);
-        grn = parsePercentage(tds[5]);
-        onp = parsePercentage(tds[6]);
+        lnp = parsePercentage(tds[offset + 1]);
+        grn = parsePercentage(tds[offset + 2]);
+        onp = parsePercentage(tds[offset + 3]);
       } else if (lnpColspan === 2) {
-        // LIB+LNP combined (colspan=2), NAT separate
-        const libLnp = parsePercentage(tds[4]) || 0;
-        const nat = parsePercentage(tds[5]) || 0;
+        const libLnp = parsePercentage(tds[offset + 1]) || 0;
+        const nat = parsePercentage(tds[offset + 2]) || 0;
         lnp = libLnp + nat;
         if (lnp === 0) lnp = null;
-        grn = parsePercentage(tds[6]);
-        onp = parsePercentage(tds[7]);
+        grn = parsePercentage(tds[offset + 3]);
+        onp = parsePercentage(tds[offset + 4]);
       } else {
-        // Fully split into LIB, LNP(Qld), NAT
-        const lib = parsePercentage(tds[4]) || 0;
-        const lnpQld = parsePercentage(tds[5]) || 0;
-        const nat = parsePercentage(tds[6]) || 0;
+        const lib = parsePercentage(tds[offset + 1]) || 0;
+        const lnpQld = parsePercentage(tds[offset + 2]) || 0;
+        const nat = parsePercentage(tds[offset + 3]) || 0;
         lnp = lib + lnpQld + nat;
         if (lnp === 0) lnp = null;
-        grn = parsePercentage(tds[7]);
-        onp = parsePercentage(tds[8]);
+        grn = parsePercentage(tds[offset + 4]);
+        onp = parsePercentage(tds[offset + 5]);
       }
     }
-
     if (alp === null || lnp === null || grn === null || onp === null) continue;
-
     const right = lnp + onp;
     const left = alp + grn;
-    if (right > 100 || left > 100 || right < 5 || left < 5) continue;
-
+    if (right > 70 || left > 70 || right < 5 || left < 5) continue;
     polls.push({ date, pollster, right, left, alp, lnp, grn, onp });
   }
-
   return polls;
 }
-
 // ── LOWESS Smoothing ────────────────────────────────────
 function lowess(data, bandwidth) {
   const n = data.length;
   if (n < 3) return data.map(d => ({ x: d.x, y: d.y }));
-
   const sorted = [...data].sort((a, b) => a.x - b.x);
   const xMin = sorted[0].x;
   const xMax = sorted[n - 1].x;
   const step = 2 * 24 * 60 * 60 * 1000;
   const result = [];
   const k = Math.max(3, Math.floor(n * bandwidth));
-
   for (let xEval = xMin; xEval <= xMax; xEval += step) {
     const dists = sorted.map((d, i) => ({ dist: Math.abs(d.x - xEval), i }));
     dists.sort((a, b) => a.dist - b.dist);
     const neighbors = dists.slice(0, k);
     const h = neighbors[neighbors.length - 1].dist || 1;
-
     let sumW = 0, sumWY = 0, sumWX = 0, sumWXX = 0, sumWXY = 0;
-
     for (const nb of neighbors) {
       const u = nb.dist / h;
       const w = u >= 1 ? 0 : Math.pow(1 - u * u * u, 3);
@@ -470,9 +421,7 @@ function lowess(data, bandwidth) {
       sumWXX += w * xi * xi;
       sumWXY += w * xi * yi;
     }
-
     if (sumW === 0) continue;
-
     const denom = sumW * sumWXX - sumWX * sumWX;
     let ySmooth;
     if (Math.abs(denom) < 1e-10) {
@@ -480,56 +429,43 @@ function lowess(data, bandwidth) {
     } else {
       ySmooth = (sumWXX * sumWY - sumWX * sumWXY) / denom;
     }
-
     result.push({ x: xEval, y: ySmooth });
   }
-
   return result;
 }
-
 // ── Chart ───────────────────────────────────────────────
 function renderChart(polls) {
   const sorted = [...polls].sort((a, b) => a.date - b.date);
-
   const rightDots = sorted.map(p => ({ x: p.date, y: p.right }));
   const leftDots  = sorted.map(p => ({ x: p.date, y: p.left }));
-
   window._pollMeta = sorted.map(p => ({
     pollster: p.pollster, right: p.right, left: p.left,
     alp: p.alp, lnp: p.lnp, grn: p.grn, onp: p.onp
   }));
-
   const rightSmooth = lowess(
     sorted.map(p => ({ x: p.date.getTime(), y: p.right })), BANDWIDTH
   ).map(p => ({ x: new Date(p.x), y: p.y }));
-
   const leftSmooth = lowess(
     sorted.map(p => ({ x: p.date.getTime(), y: p.left })), BANDWIDTH
   ).map(p => ({ x: new Date(p.x), y: p.y }));
-
   // Prepend election result so trend lines connect to the election markers
   rightSmooth.unshift({ x: ELECTION_DATE, y: ELECTION_RIGHT });
   leftSmooth.unshift({ x: ELECTION_DATE, y: ELECTION_LEFT });
-
   updateHeader(rightSmooth, leftSmooth);
-
   // Auto-scale Y axis (include election results)
   const allValues = [...rightDots.map(d => d.y), ...leftDots.map(d => d.y), ELECTION_RIGHT, ELECTION_LEFT];
   const dataMin = Math.min(...allValues);
   const dataMax = Math.max(...allValues);
   const yMin = Math.floor((dataMin - 3) / 5) * 5;
   const yMax = Math.ceil((dataMax + 3) / 5) * 5;
-
   // Election result markers (opaque circles)
   const electionRight = [{ x: ELECTION_DATE, y: ELECTION_RIGHT }];
   const electionLeft  = [{ x: ELECTION_DATE, y: ELECTION_LEFT }];
-
   const ctx = document.getElementById('chart').getContext('2d');
   chartInstance = new Chart(ctx, {
     type: 'scatter',
     data: {
       datasets: [
-        // Election result markers (opaque, larger)
         {
           label: 'Election result (Right)',
           data: electionRight,
@@ -712,16 +648,13 @@ function renderChart(polls) {
     }
   });
 }
-
 // ── Header Update ───────────────────────────────────────
 function updateHeader(rightSmooth, leftSmooth) {
   const avgR = rightSmooth[rightSmooth.length - 1].y;
   const avgL = leftSmooth[leftSmooth.length - 1].y;
   const gap = avgR - avgL;
-
   document.getElementById('rightPct').textContent = avgR.toFixed(1) + '%';
   document.getElementById('leftPct').textContent  = avgL.toFixed(1) + '%';
-
   const leadEl = document.getElementById('lead');
   if (Math.abs(gap) < 0.5) {
     leadEl.textContent = 'Essentially tied';
@@ -734,34 +667,28 @@ function updateHeader(rightSmooth, leftSmooth) {
     leadEl.style.color = LEFT_TEXT;
   }
 }
-
 // ── Main Load ───────────────────────────────────────────
 async function loadData() {
   const loadingEl = document.getElementById('loadingEl');
   const chartWrap = document.getElementById('chartWrap');
   const errorBanner = document.getElementById('errorBanner');
   const warnBanner = document.getElementById('warnBanner');
-
   loadingEl.classList.remove('hidden');
   chartWrap.classList.add('hidden');
   errorBanner.style.display = 'none';
   warnBanner.style.display = 'none';
-
   if (chartInstance) {
     chartInstance.destroy();
     chartInstance = null;
   }
-
   try {
     setStatus('Fetching 2026 polls...');
     const results = await Promise.allSettled(SECTIONS.map((n, i) => {
       return fetchSection(n).then(html => { setStatus(`Loaded ${['2026','2025'][i]} polls...`); return html; });
     }));
-
     let allPolls = [];
     let failedSections = 0;
     let errors = [];
-
     const years = [2026, 2025];
     results.forEach((r, i) => {
       if (r.status === 'fulfilled') {
@@ -773,26 +700,19 @@ async function loadData() {
         console.error(`Section ${SECTIONS[i]} failed:`, r.reason);
       }
     });
-
     if (allPolls.length === 0) {
       throw new Error('Could not load data (' + errors.join(', ') + '). Try opening this file directly in your browser.');
     }
-
     if (failedSections > 0) {
       warnBanner.textContent = `${failedSections} of ${SECTIONS.length} year tables failed to load. Showing partial data.`;
       warnBanner.style.display = 'block';
     }
-
     allPolls.sort((a, b) => a.date - b.date);
-
     loadingEl.classList.add('hidden');
     chartWrap.classList.remove('hidden');
-
     setTimeout(() => renderChart(allPolls), 0);
-
     document.getElementById('pollCount').textContent = `Based on ${allPolls.length} polls`;
     document.getElementById('updated').textContent = `Last refreshed ${new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-
   } catch (err) {
     loadingEl.classList.add('hidden');
     errorBanner.textContent = `Failed to load data: ${err.message}. Tap Refresh to try again.`;
@@ -800,7 +720,6 @@ async function loadData() {
     console.error(err);
   }
 }
-
 // ── Init ────────────────────────────────────────────────
 if (typeof Chart !== 'undefined') {
   loadData();
