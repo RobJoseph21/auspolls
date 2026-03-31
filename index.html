@@ -207,7 +207,6 @@ h1 {
 // ── Config ──────────────────────────────────────────────
 const API_BASE = 'https://en.wikipedia.org/w/api.php';
 const PAGE = 'Opinion_polling_for_the_next_Australian_federal_election';
-const SECTIONS = [5, 6]; // 2026, 2025
 const RIGHT_COLOR = '#0087DC';
 const LEFT_COLOR  = '#E4003B';
 const RIGHT_TEXT  = '#006BB3';
@@ -222,6 +221,37 @@ const ELECTION_ONP = 6.4;
 const ELECTION_RIGHT = ELECTION_LNP + ELECTION_ONP; // 38.2
 const ELECTION_LEFT  = ELECTION_ALP + ELECTION_GRN;  // 46.8
 let chartInstance = null;
+// ── Dynamic Section Discovery ───────────────────────────
+async function findVotingIntentionSections() {
+  const url = `${API_BASE}?action=parse&page=${encodeURIComponent(PAGE)}&prop=sections&format=json&origin=*`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Sections API HTTP ${resp.status}`);
+  const data = await resp.json();
+  const sections = data.parse.sections;
+  // Find the "Voting intention" parent section
+  let votingIntentionLevel = null;
+  let inVotingIntention = false;
+  const yearSections = [];
+  for (const s of sections) {
+    const level = parseInt(s.level);
+    const line = s.line.trim();
+    if (line === 'Voting intention') {
+      votingIntentionLevel = level;
+      inVotingIntention = true;
+      continue;
+    }
+    if (inVotingIntention) {
+      if (level <= votingIntentionLevel) break; // left the section
+      if (level === votingIntentionLevel + 1 && /^\d{4}$/.test(line)) {
+        yearSections.push({ year: parseInt(line), index: parseInt(s.index) });
+      }
+    }
+  }
+  // Sort descending by year (2026 first, then 2025)
+  yearSections.sort((a, b) => b.year - a.year);
+  if (yearSections.length === 0) throw new Error('Could not find voting intention sections on Wikipedia');
+  return yearSections;
+}
 // ── Data Fetching (tries fetch, then XHR, then JSONP) ──
 function setStatus(msg) {
   const el = document.querySelector('.loading-text');
@@ -457,7 +487,6 @@ function renderChart(polls) {
   const dataMin = Math.min(...allValues);
   const dataMax = Math.max(...allValues);
   const yMin = Math.floor((dataMin - 3) / 5) * 5;
-  //const yMin = 0;
   const yMax = Math.ceil((dataMax + 3) / 5) * 5;
   // Election result markers (opaque circles)
   const electionRight = [{ x: ELECTION_DATE, y: ELECTION_RIGHT }];
@@ -683,29 +712,30 @@ async function loadData() {
     chartInstance = null;
   }
   try {
-    setStatus('Fetching 2026 polls...');
-    const results = await Promise.allSettled(SECTIONS.map((n, i) => {
-      return fetchSection(n).then(html => { setStatus(`Loaded ${['2026','2025'][i]} polls...`); return html; });
+    setStatus('Finding poll sections...');
+    const yearSections = await findVotingIntentionSections();
+    setStatus(`Found ${yearSections.length} year tables, fetching...`);
+    const results = await Promise.allSettled(yearSections.map((s) => {
+      return fetchSection(s.index).then(html => { setStatus(`Loaded ${s.year} polls...`); return html; });
     }));
     let allPolls = [];
     let failedSections = 0;
     let errors = [];
-    const years = [2026, 2025];
     results.forEach((r, i) => {
       if (r.status === 'fulfilled') {
-        const polls = parseSection(r.value, years[i]);
+        const polls = parseSection(r.value, yearSections[i].year);
         allPolls = allPolls.concat(polls);
       } else {
         failedSections++;
         errors.push(r.reason.message);
-        console.error(`Section ${SECTIONS[i]} failed:`, r.reason);
+        console.error(`Section ${yearSections[i].index} (${yearSections[i].year}) failed:`, r.reason);
       }
     });
     if (allPolls.length === 0) {
       throw new Error('Could not load data (' + errors.join(', ') + '). Try opening this file directly in your browser.');
     }
     if (failedSections > 0) {
-      warnBanner.textContent = `${failedSections} of ${SECTIONS.length} year tables failed to load. Showing partial data.`;
+      warnBanner.textContent = `${failedSections} of ${yearSections.length} year tables failed to load. Showing partial data.`;
       warnBanner.style.display = 'block';
     }
     allPolls.sort((a, b) => a.date - b.date);
